@@ -81,11 +81,13 @@ sub select_perls ($manifest, $opt) {
   return @selected;
 }
 
-# The tag list for a cell.  Every cell gets VERSION-DEBIAN and ALIAS-DEBIAN;
-# only cells on the default debian also get the bare VERSION and ALIAS tags,
-# so exactly one image owns each of "5.36", "latest", and "devel".
+# The tag list for a cell.  Every cell gets ALIAS-DEBIAN for each alias; only
+# cells on the default debian also get the bare ALIAS tags, so exactly one
+# image owns each of "5.36", "latest", and "devel".  The full version (5.36.3)
+# is deliberately not a tag: it is an implementation detail, and a tag per
+# point release would leave stale tags behind whenever a branch moved on.
 sub tags_for ($manifest, $perl, $debian) {
-  my @names = ($perl->{version}, $perl->{aliases}->@*);
+  my @names = $perl->{aliases}->@*;
   my @tags  = map {; "$_-$debian" } @names;
   push @tags, @names if $debian eq $manifest->{default_debian};
   return @tags;

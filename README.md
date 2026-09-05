@@ -43,10 +43,15 @@ on, then the newest development release.  The exact versions are in
 
 ## Tags
 
-For perl `5.36.3` on `trixie`:
+For perl 5.36 on `trixie`:
 
-    5.36.3-trixie  5.36-trixie
-    5.36.3         5.36            (only on the default debian)
+    5.36-trixie
+    5.36            (only on the default debian)
+
+The point release (5.36.3) is not part of any tag; it is an implementation
+detail, and tagging it would leave stale tags behind every time a branch
+moved on.  The exact version inside an image is in `perls.json`, and in the
+`PERL_CI_PERL_VERSION` environment variable.
 
 The newest stable perl also gets `latest-trixie` and `latest`; the development
 release gets `devel-trixie` and `devel` in place of a `5.x` alias.  Exactly one

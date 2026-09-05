@@ -141,4 +141,7 @@ jobs:
           tags=$(echo "${{ matrix.cell.tags }}" | tr ',' '\n' | sed "s|^|--tag $IMAGE:|" | tr '\n' ' ')
           docker buildx imagetools create $tags $(printf "$IMAGE@sha256:%s " *)
 
-      - run: docker buildx imagetools inspect "$IMAGE:${{ matrix.cell.version }}-${{ matrix.cell.debian }}"
+      # Inspect the first tag in the list; the rest point at the same manifest.
+      - run: docker buildx imagetools inspect "$IMAGE:${TAGS%%,*}"
+        env:
+          TAGS: ${{ matrix.cell.tags }}
