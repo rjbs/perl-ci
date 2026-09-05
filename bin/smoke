@@ -1,0 +1,60 @@
+#!/usr/bin/perl
+use strict;
+use warnings;
+use Config;
+
+# smoke runs inside the image under the perl we just built, so it has to be
+# 5.8-clean: no signatures, no say, no postfix deref.  It checks that the
+# stage of the image named on the command line is in the shape we expect and
+# exits nonzero if anything is off, which fails the docker build.
+
+my ($stage, $version) = @ARGV;
+die "usage: $0 STAGE VERSION\n" unless $stage && $version;
+
+my @fail;
+
+sub check {
+  my ($desc, $ok) = @_;
+  printf "%s %s\n", ($ok ? 'ok   ' : 'FAIL '), $desc;
+  push @fail, $desc unless $ok;
+}
+
+sub module_loads {
+  my ($module) = @_;
+  check("load $module", system($^X, "-M$module", '-e', '1') == 0);
+}
+
+sub tool_runs {
+  my (@cmd) = @_;
+  check("run @cmd", system(@cmd) == 0);
+}
+
+my $running = sprintf '%vd', $^V;
+check("running perl $version (got $running)", $running eq $version);
+check("running /usr/local/bin/perl (got $^X)", $^X =~ m{\A/usr/local/bin/perl});
+
+check("useshrplib", ($Config{useshrplib} || '') eq 'true');
+
+module_loads($_) for qw(Digest::MD5 List::Util Storable POSIX Data::Dumper);
+
+if ($stage eq 'toolchain' || $stage eq 'full') {
+  tool_runs(qw(cpanm --version));
+  tool_runs(qw(cpm --version));
+}
+
+if ($stage eq 'full') {
+  module_loads($_) for qw(Test::More Test2::V0 Carton::Snapshot);
+  module_loads('Dist::Zilla') if $] >= 5.022;
+
+  for my $helper (qw(build-dist test-dist cpan-install-dist-deps cpan-install-build-deps auto-build-and-test-dist)) {
+    check("helper $helper in /usr/local/bin", -x "/usr/local/bin/$helper");
+  }
+}
+
+if (@fail) {
+  print "\n", scalar @fail, " check(s) failed:\n";
+  print "  $_\n" for @fail;
+  exit 1;
+}
+
+print "\nall checks passed for stage $stage\n";

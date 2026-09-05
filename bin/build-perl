@@ -1,0 +1,86 @@
+#!/usr/bin/perl
+use v5.36;
+
+# build-perl runs inside the image, under Debian's own perl, before the perl
+# we are building exists.  It fetches the tarball for one release, checks it
+# against the sha256 from perls.json, applies Devel::PatchPerl, and builds
+# and installs into /usr/local.
+
+my ($version, $sha256, $devel) = @ARGV;
+die "usage: $0 VERSION SHA256 DEVEL(0|1)\n"
+  unless ($version // '') =~ /\A5\.\d+\.\d+\z/ && ($sha256 // '') =~ /\A[0-9a-f]{64}\z/;
+
+my ($minor) = (split /\./, $version)[1];
+
+my $srcdir  = '/usr/src/perl';
+my $tarball = "perl-$version.tar.gz";
+my $url     = "https://www.cpan.org/src/5.0/$tarball";
+
+sub run (@cmd) {
+  say "+ @cmd";
+  system(@cmd) == 0 or die "command failed (exit " . ($? >> 8) . "): @cmd\n";
+}
+
+sub capture (@cmd) {
+  open my $fh, '-|', @cmd or die "can't run @cmd: $!\n";
+  chomp(my $out = do { local $/; <$fh> });
+  close $fh or die "command failed: @cmd\n";
+  return $out;
+}
+
+sub verify_sha256 ($file, $want) {
+  my ($got) = split /\s+/, capture(q{sha256sum}, $file);
+  die "sha256 mismatch for $file: wanted $want, got $got\n" unless $got eq $want;
+  say "sha256 ok for $file";
+}
+
+run(qw(mkdir -p), $srcdir);
+chdir $srcdir or die "can't chdir to $srcdir: $!\n";
+
+run(qw(curl -fsSL --retry 3), $url, '-o', $tarball);
+verify_sha256($tarball, $sha256);
+run(qw(tar --strip-components=1 -xzf), $tarball);
+unlink $tarball or die "can't remove $tarball: $!\n";
+
+# Without the patch(1) binary Devel::PatchPerl quietly applies only its
+# pure-Perl fixups and the build fails later in a confusing way; the
+# Dockerfile installs patch, but check anyway since this is the cheap place
+# to notice. -- claude, 2026-09-05
+die "patch(1) is not installed; Devel::PatchPerl needs it\n"
+  unless grep { -x "$_/patch" } split /:/, $ENV{PATH};
+
+run('patchperl');
+
+my $gnu_arch  = capture(qw(dpkg-architecture --query DEB_BUILD_GNU_TYPE));
+my $arch_bits = capture(qw(dpkg-architecture --query DEB_BUILD_ARCH_BITS));
+
+my @configure = (
+  './Configure', '-des',
+  '-Dprefix=/usr/local',
+  '-Dvendorprefix=/usr/local',
+  '-Duseshrplib',
+  "-Darchname=$gnu_arch",
+  ($arch_bits eq '64' ? '-Duse64bitall' : '-Duse64bitint'),
+);
+
+# gcc 14 turned implicit function declarations, int/pointer conversions and
+# mismatched returns into hard errors, and perl source from before 5.30 trips
+# every one of them.  -fpermissive demotes them back to warnings.  It lands in
+# $Config{ccflags}, so XS built against these perls gets it too, which is what
+# we want: old XS is no cleaner than old perl. -- claude, 2026-09-05
+push @configure, q{-Accflags=-fPIC -fpermissive} if $minor < 30;
+
+push @configure, '-Dusedevel', '-Dversiononly=undef' if $devel;
+
+run(@configure);
+
+# Parallel make in the 5.8 tree has races that produce bogus failures; it is
+# cheap enough to build serially. -- claude, 2026-09-05
+my $jobs = $minor < 10 ? 1 : capture('nproc');
+run('make', "-j$jobs");
+run(qw(make install));
+
+chdir '/' or die "can't chdir to /: $!\n";
+run(qw(rm -rf), $srcdir);
+
+say "built perl $version into /usr/local";
