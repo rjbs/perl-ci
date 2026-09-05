@@ -1,0 +1,47 @@
+name: Clean up GHCR images
+
+# Every publish leaves behind the previous manifest list and its per-arch
+# images, none of which any tag points at any more.  This deletes those, with
+# a week of backlog kept so a bad build can still be rolled back by digest.
+#
+# Not actions/delete-package-versions: that deletes every untagged version,
+# and our per-arch images are untagged versions referenced only by the tagged
+# manifest list.  This action walks the manifests and keeps what is referenced.
+
+on:
+  schedule:
+    - cron: "30 6 * * 0"
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: Only report what would be deleted
+        type: boolean
+        default: true
+      delete-tags:
+        description: "Regex of tags to delete outright (e.g. ^5\\.\\d+\\.\\d+(-\\w+)?$ for stale point-release tags); empty for none"
+        type: string
+        default: ""
+
+# Don't prune while a publish is mid-flight.
+concurrency:
+  group: build-images
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - uses: dataaxiom/ghcr-cleanup-action@d52806a0dc70b430571a37da1fde39733ffd640f # v1.2.2
+        with:
+          package: perl-ci
+          delete-untagged: true
+          delete-orphaned-images: true
+          older-than: 7 days
+          validate: true
+          use-regex: true
+          delete-tags: ${{ inputs.delete-tags }}
+          # Whatever else is asked for, never delete a live alias tag.
+          exclude-tags: ^(latest|devel|5\.\d+)(-\w+)?$
+          dry-run: ${{ inputs.dry-run || false }}
