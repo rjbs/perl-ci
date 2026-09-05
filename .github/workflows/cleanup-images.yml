@@ -18,7 +18,7 @@ on:
         type: boolean
         default: true
       delete-tags:
-        description: "Regex of tags to delete outright (e.g. ^5\\.\\d+\\.\\d+(-\\w+)?$ for stale point-release tags); empty for none"
+        description: "Regex of tags to delete outright; empty for none.  Stale point-release tags: ^5[.][0-9]+[.][0-9]+$|^5[.][0-9]+[.][0-9]+-[a-z]+$  (the action rejects quantified groups as ReDoS-prone, so spell alternatives out)"
         type: string
         default: ""
 
@@ -43,5 +43,5 @@ jobs:
           use-regex: true
           delete-tags: ${{ inputs.delete-tags }}
           # Whatever else is asked for, never delete a live alias tag.
-          exclude-tags: ^(latest|devel|5\.\d+)(-\w+)?$
+          exclude-tags: ^(latest|devel|5[.][0-9]+)$|^(latest|devel|5[.][0-9]+)-[a-z]+$
           dry-run: ${{ inputs.dry-run || false }}
