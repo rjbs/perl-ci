@@ -46,6 +46,10 @@ jobs:
           validate: true
           use-regex: true
           delete-tags: ${{ inputs.delete-tags }}
-          # Whatever else is asked for, never delete a live alias tag.
-          exclude-tags: ^(latest|devel|5[.][0-9]+)$|^(latest|devel|5[.][0-9]+)-[a-z]+$
+          # On a routine run, never touch an image carrying a live alias tag.
+          # Exclusion is per image, not per tag, so it has to come off when a
+          # tag is being deleted deliberately: the stale point-release tags
+          # sit on the same images as the live aliases.  The action untags
+          # rather than deletes an image that still has other tags.
+          exclude-tags: ${{ inputs.delete-tags == '' && '^(latest|devel|5[.][0-9]+)$|^(latest|devel|5[.][0-9]+)-[a-z]+$' || '' }}
           dry-run: ${{ inputs.dry-run || false }}
