@@ -1,0 +1,16 @@
+use strict;
+use warnings;
+
+# This cpanfile is installed before the main one, and exists to pin things
+# that must already be in place when cpm starts resolving the main cpanfile:
+# build-time toolchain modules whose newest release no longer works on some
+# perl.  Keep it short; ordinary "this module needs pinning" belongs in
+# cpanfile.  Plain requires with $] checks here, since the requires_by_perl
+# helper lives in cpanfile and the two files are read separately.
+
+# ExtUtils::MakeMaker::CPANfile 0.11 dies with "Can't call method
+# as_string_hash on unblessed reference" while configuring Parse::PMFile,
+# which takes Menlo, Menlo::Legacy, Carton and so Carton::Snapshot down with
+# it.  Seen only on 5.18 so far, but 0.09 satisfies everything and costs the
+# other old perls nothing. -- claude, 2026-09-05
+requires 'ExtUtils::MakeMaker::CPANfile', '== 0.09' if $] < 5.024;

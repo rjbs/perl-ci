@@ -1,0 +1,77 @@
+#!/usr/bin/perl
+use strict;
+use warnings;
+
+# install-toolchain runs inside the image under the freshly built perl, so it
+# must be 5.8-clean.  It installs the CPAN clients (cpanm, then a fatpacked
+# cpm) and then whatever cpanfile.bootstrap asks for.  Everything here is
+# pinned by version and checksum: this is the plumbing that installs the
+# plumbing, and when it breaks nothing downstream can be trusted.
+
+my $SRC = '/usr/local/src/perl-ci';
+
+my %cpanm = (
+  name   => 'App-cpanminus-1.7049',
+  url    => 'https://www.cpan.org/authors/id/M/MI/MIYAGAWA/App-cpanminus-1.7049.tar.gz',
+  sha256 => 'b9ffb88e62a06aa91bd7d5a28ef6bdbb942608aea90e3969aa29b33640035214',
+);
+
+# cpm releases after 0.998003 need perl 5.24, so older perls get the last
+# fatpacked script that supports them.  Both are pinned to an immutable ref.
+# The checksums come from Perl/docker-perl and Perl/docker-perl-tester
+# respectively, where these exact files have been in use. -- claude, 2026-09-05
+my %cpm = $] >= 5.024
+  ? (
+    url    => 'https://raw.githubusercontent.com/skaji/cpm/v1.1.5/cpm',
+    sha256 => '2e7cdae8f84a673384d40e2486aa236955b7f69547d66f9920564c05b330f9e0',
+  )
+  : (
+    url    => 'https://raw.githubusercontent.com/skaji/cpm/1aa61b3c6c8aea2df7a8802206294d268422ccef/cpm',
+    sha256 => '6a27e528cf37635773e738db36c4b4ab4345d5a9d00b8cbd2f2dc01abc73177d',
+  );
+
+sub run {
+  my (@cmd) = @_;
+  print "+ @cmd\n";
+  system(@cmd) == 0 or die "command failed (exit " . ($? >> 8) . "): @cmd\n";
+}
+
+sub verify_sha256 {
+  my ($file, $want) = @_;
+  my ($got) = split /\s+/, `sha256sum $file`;
+  die "sha256 mismatch for $file: wanted $want, got $got\n" unless $got eq $want;
+  print "sha256 ok for $file\n";
+}
+
+sub fetch {
+  my ($url, $sha256, $dest) = @_;
+  run(qw(curl -fsSL --retry 3), $url, '-o', $dest);
+  verify_sha256($dest, $sha256);
+}
+
+my $work = '/usr/src/toolchain';
+run(qw(mkdir -p), $work);
+chdir $work or die "can't chdir to $work: $!\n";
+
+fetch($cpanm{url}, $cpanm{sha256}, "$cpanm{name}.tar.gz");
+run(qw(tar -xzf), "$cpanm{name}.tar.gz");
+chdir $cpanm{name} or die "can't chdir to $cpanm{name}: $!\n";
+
+# The same two patches Perl/docker-perl applies: talk to CPAN over https, and
+# don't try LWP (which may not be able to do https) when curl is right there.
+run($^X, '-pi', '-e', 's{http://(www\.cpan\.org|backpan\.perl\.org|cpan\.metacpan\.org|fastapi\.metacpan\.org|cpanmetadb\.plackperl\.org)}{https://$1}g', 'bin/cpanm');
+run($^X, '-pi', '-e', 's{try_lwp=>1}{try_lwp=>0}g', 'bin/cpanm');
+run($^X, 'bin/cpanm', '--notest', '.');
+
+chdir $work or die "can't chdir to $work: $!\n";
+
+fetch($cpm{url}, $cpm{sha256}, '/usr/local/bin/cpm');
+chmod 0755, '/usr/local/bin/cpm' or die "can't chmod cpm: $!\n";
+
+run(qw(cpanm --version));
+run(qw(cpm --version));
+
+run(qw(cpm install -g --show-build-log-on-failure --cpanfile), "$SRC/cpanfile.bootstrap");
+
+chdir '/' or die "can't chdir to /: $!\n";
+run(qw(rm -rf), $work);
