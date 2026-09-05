@@ -1,0 +1,111 @@
+#!/usr/bin/env perl
+use v5.36;
+
+use Getopt::Long;
+use HTTP::Tiny;
+use JSON::PP;
+
+# refresh-manifest rewrites perls.json so that it names the newest release of
+# every even-numbered perl branch from 5.10 on, plus the newest development
+# release.  Entries marked "pinned" (5.8.8) are kept exactly as they are.
+# Aliases are derived, not hand-edited: every stable release gets "5.X", the
+# highest stable release also gets "latest", and the devel release gets
+# "devel".  Debian columns and default_debian are left alone.
+
+my $SRC = 'https://www.cpan.org/src/5.0/';
+
+my %opt = (manifest => 'perls.json', check => 0);
+GetOptions(
+  'manifest=s' => \$opt{manifest},
+  'check'      => \$opt{check},   # exit 1 if the manifest would change; don't write
+) or die "usage: $0 [--manifest FILE] [--check]\n";
+
+my $json = JSON::PP->new->utf8->canonical->pretty->indent_length(2);
+my $http = HTTP::Tiny->new(agent => 'perl-ci/refresh-manifest');
+
+sub get ($url) {
+  my $res = $http->get($url);
+  die "GET $url failed: $res->{status} $res->{reason}\n" unless $res->{success};
+  return $res->{content};
+}
+
+sub read_manifest ($file) {
+  open my $fh, '<:raw', $file or die "can't read $file: $!\n";
+  return $json->decode(do { local $/; <$fh> });
+}
+
+sub sha256_for ($version) {
+  my ($sha) = get("${SRC}perl-$version.tar.gz.sha256.txt") =~ /\A([0-9a-f]{64})\b/
+    or die "no sha256 found for perl-$version\n";
+  return $sha;
+}
+
+# Returns { branch => newest_version } for every 5.x branch on cpan.org.
+sub newest_by_branch () {
+  my %newest;
+  for my $v (get($SRC) =~ /perl-(5\.\d+\.\d+)\.tar\.gz/g) {
+    my ($x, $y) = (split /\./, $v)[1, 2];
+    my $have = $newest{$x};
+    $newest{$x} = $v if ! $have || $y > (split /\./, $have)[2];
+  }
+  return \%newest;
+}
+
+sub cmp_version ($a, $b) {
+  my @a = split /\./, $a;
+  my @b = split /\./, $b;
+  return $a[1] <=> $b[1] || $a[2] <=> $b[2];
+}
+
+my $manifest = read_manifest($opt{manifest});
+my %old      = map {; $_->{version} => $_ } $manifest->{perls}->@*;
+
+my $newest  = newest_by_branch();
+my @stable  = map { $newest->{$_} } sort { $a <=> $b } grep { $_ >= 10 && $_ % 2 == 0 } keys %$newest;
+my ($devel) = map { $newest->{$_} } sort { $b <=> $a } grep { $_ % 2 == 1 } keys %$newest;
+
+my @perls = grep { $_->{pinned} } $manifest->{perls}->@*;
+
+for my $version (@stable, $devel) {
+  my $entry = $old{$version} // { version => $version };
+  $entry->{sha256} //= sha256_for($version);
+
+  my ($x) = (split /\./, $version)[1];
+  my @aliases = $version eq $devel ? ('devel') : ("5.$x");
+  push @aliases, 'latest' if $version eq $stable[-1];
+  $entry->{aliases} = \@aliases;
+  $entry->{devel}   = JSON::PP::true if $version eq $devel;
+
+  push @perls, $entry;
+}
+
+$_->{sha256} //= sha256_for($_->{version}) for @perls;
+
+@perls = sort { cmp_version($a->{version}, $b->{version}) } @perls;
+$manifest->{perls} = \@perls;
+
+my $new_text = $json->encode($manifest);
+my $old_text = do { local $/; open my $fh, '<:raw', $opt{manifest}; <$fh> };
+
+for my $entry (@perls) {
+  my $was = $old{ $entry->{version} };
+  say sprintf "%-8s %s", $entry->{version},
+    $was ? 'unchanged' : 'NEW';
+}
+my %kept = map {; $_->{version} => 1 } @perls;
+say "removed: $_" for grep { ! $kept{$_} } sort keys %old;
+
+if ($new_text eq $old_text) {
+  say "$opt{manifest} is up to date";
+  exit 0;
+}
+
+if ($opt{check}) {
+  say "$opt{manifest} is out of date";
+  exit 1;
+}
+
+open my $out, '>:raw', $opt{manifest} or die "can't write $opt{manifest}: $!\n";
+print {$out} $new_text;
+close $out or die "can't close $opt{manifest}: $!\n";
+say "wrote $opt{manifest}";

@@ -1,0 +1,152 @@
+{
+  "debians" : [
+    "trixie",
+    "forky"
+  ],
+  "default_debian" : "trixie",
+  "perls" : [
+    {
+      "aliases" : [
+        "5.8"
+      ],
+      "pinned" : true,
+      "sha256" : "e15d499321e003d12ed183601e37ee7ba5f64b278d1de30149ce01bd4a3f234d",
+      "version" : "5.8.8"
+    },
+    {
+      "aliases" : [
+        "5.10"
+      ],
+      "sha256" : "cb7f26ea4b2b28d6644354d87a269d01cac1b635287dae64e88eeafa24b44f35",
+      "version" : "5.10.1"
+    },
+    {
+      "aliases" : [
+        "5.12"
+      ],
+      "sha256" : "1db3d7cf39ac0379233211dd41afad300c11b33e3219e1d76908d01172f84a5c",
+      "version" : "5.12.5"
+    },
+    {
+      "aliases" : [
+        "5.14"
+      ],
+      "sha256" : "803fd44c492fcef79fda456a6f50455766e00ddec2e568a543630f65ff3f44cb",
+      "version" : "5.14.4"
+    },
+    {
+      "aliases" : [
+        "5.16"
+      ],
+      "sha256" : "69cf08dca0565cec2c5c6c2f24b87f986220462556376275e5431cc2204dedb6",
+      "version" : "5.16.3"
+    },
+    {
+      "aliases" : [
+        "5.18"
+      ],
+      "sha256" : "01a4e11a9a34616396c4a77b3cef51f76a297e1a2c2c490ae6138bf0351eb29f",
+      "version" : "5.18.4"
+    },
+    {
+      "aliases" : [
+        "5.20"
+      ],
+      "sha256" : "3524e3a76b71650ab2f794fd68e45c366ec375786d2ad2dca767da424bbb9b4a",
+      "version" : "5.20.3"
+    },
+    {
+      "aliases" : [
+        "5.22"
+      ],
+      "sha256" : "ba9ef57c2b709f2dad9c5f6acf3111d9dfac309c484801e0152edbca89ed61fa",
+      "version" : "5.22.4"
+    },
+    {
+      "aliases" : [
+        "5.24"
+      ],
+      "sha256" : "bf2f3dddb10154d833cdb415a93f1672b6d8599e87913b66c085c332cb361970",
+      "version" : "5.24.4"
+    },
+    {
+      "aliases" : [
+        "5.26"
+      ],
+      "sha256" : "b75ae40de8292fa53021b35eb3552fcaf65d7891ce4c5b6668d665cb0233c493",
+      "version" : "5.26.3"
+    },
+    {
+      "aliases" : [
+        "5.28"
+      ],
+      "sha256" : "afc9c1d661597ae14d9e883c5071092bed73f60c3109b294823ea01aca705114",
+      "version" : "5.28.3"
+    },
+    {
+      "aliases" : [
+        "5.30"
+      ],
+      "sha256" : "32e04c8bb7b1aecb2742a7f7ac0eabac100f38247352a73ad7fa104e39e7406f",
+      "version" : "5.30.3"
+    },
+    {
+      "aliases" : [
+        "5.32"
+      ],
+      "sha256" : "03b693901cd8ae807231b1787798cf1f2e0b8a56218d07b7da44f784a7caeb2c",
+      "version" : "5.32.1"
+    },
+    {
+      "aliases" : [
+        "5.34"
+      ],
+      "sha256" : "5b12f62863332b2a5f54102af9cdf8c010877e4bf3294911edbd594b2a1e8ede",
+      "version" : "5.34.3"
+    },
+    {
+      "aliases" : [
+        "5.36"
+      ],
+      "sha256" : "f2a1ad88116391a176262dd42dfc52ef22afb40f4c0e9810f15d561e6f1c726a",
+      "version" : "5.36.3"
+    },
+    {
+      "aliases" : [
+        "5.38"
+      ],
+      "sha256" : "b7667d3ff309068852af7853910aaccec26c839d717402121b664ac705e07bfe",
+      "version" : "5.38.5"
+    },
+    {
+      "aliases" : [
+        "5.40"
+      ],
+      "sha256" : "09d926ae2d1b277c3bce62054c41da47c981380d719c41cf980b67945cc581ed",
+      "version" : "5.40.5"
+    },
+    {
+      "aliases" : [
+        "5.42"
+      ],
+      "sha256" : "1137740985837b5cdf15f0cfab932279dcb4352f912fed6fc144e8b4f0823627",
+      "version" : "5.42.3"
+    },
+    {
+      "aliases" : [
+        "5.44",
+        "latest"
+      ],
+      "sha256" : "3b855066b92491cb40e86affb1ca57d1a388aa43e51b91c7806a32c2f65f96c3",
+      "version" : "5.44.0"
+    },
+    {
+      "aliases" : [
+        "devel"
+      ],
+      "devel" : true,
+      "sha256" : "4ee6767d0f9e02899dc930aa6c0deeb87f6c6c92e53a796e4ccf5414afa7938f",
+      "version" : "5.45.2"
+    }
+  ]
+}
