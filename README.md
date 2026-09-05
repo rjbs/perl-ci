@@ -53,9 +53,9 @@ detail, and tagging it would leave stale tags behind every time a branch
 moved on.  The exact version inside an image is in `perls.json`, and in the
 `PERL_CI_PERL_VERSION` environment variable.
 
-The newest stable perl also gets `latest-trixie` and `latest`; the development
-release gets `devel-trixie` and `devel` in place of a `5.x` alias.  Exactly one
-cell owns each bare tag.
+The development release gets `devel-trixie` and `devel` in place of a `5.x`
+alias.  Exactly one cell owns each bare tag.  There is no `latest`: pick the
+perl you want.
 
 Images are multi-arch: `linux/amd64` and `linux/arm64`.
 
@@ -87,7 +87,7 @@ merges the two into one manifest and applies the cell's tags.
 ## Maintaining
 
 - **A new perl came out.**  Run `bin/refresh-manifest`; it updates
-  `perls.json` (and moves `latest` if needed).  Commit, then build.
+  `perls.json`.  Commit, then build.
 - **A module stopped installing on some perl.**  Pin it in `cpanfile` with
   `requires_by_perl`, with a comment saying why.  If it's a build-time module
   that has to be in place before cpm reads the cpanfile at all, pin it in

@@ -8,9 +8,10 @@ use JSON::PP;
 # refresh-manifest rewrites perls.json so that it names the newest release of
 # every even-numbered perl branch from 5.10 on, plus the newest development
 # release.  Entries marked "pinned" (5.8.8) are kept exactly as they are.
-# Aliases are derived, not hand-edited: every stable release gets "5.X", the
-# highest stable release also gets "latest", and the devel release gets
-# "devel".  Debian columns and default_debian are left alone.
+# Aliases are derived, not hand-edited: every stable release gets "5.X" and
+# the devel release gets "devel".  There is deliberately no "latest": it is not
+# meaningful enough, and people should pick the perl they want.  Debian
+# columns and default_debian are left alone.
 
 my $SRC = 'https://www.cpan.org/src/5.0/';
 
@@ -72,7 +73,6 @@ for my $version (@stable, $devel) {
 
   my ($x) = (split /\./, $version)[1];
   my @aliases = $version eq $devel ? ('devel') : ("5.$x");
-  push @aliases, 'latest' if $version eq $stable[-1];
   $entry->{aliases} = \@aliases;
   $entry->{devel}   = JSON::PP::true if $version eq $devel;
 

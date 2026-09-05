@@ -134,8 +134,7 @@
     },
     {
       "aliases" : [
-        "5.44",
-        "latest"
+        "5.44"
       ],
       "sha256" : "3b855066b92491cb40e86affb1ca57d1a388aa43e51b91c7806a32c2f65f96c3",
       "version" : "5.44.0"

@@ -83,7 +83,7 @@ sub select_perls ($manifest, $opt) {
 
 # The tag list for a cell.  Every cell gets ALIAS-DEBIAN for each alias; only
 # cells on the default debian also get the bare ALIAS tags, so exactly one
-# image owns each of "5.36", "latest", and "devel".  The full version (5.36.3)
+# image owns each of "5.36" and "devel".  The full version (5.36.3)
 # is deliberately not a tag: it is an implementation detail, and a tag per
 # point release would leave stale tags behind whenever a branch moved on.
 sub tags_for ($manifest, $perl, $debian) {
