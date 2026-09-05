@@ -34,9 +34,13 @@ RUN apt-get update \
         zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
 
-COPY bin/build-perl bin/smoke /usr/local/src/perl-ci/
+COPY bin/build-perl /usr/local/src/perl-ci/
 
 RUN /usr/bin/perl /usr/local/src/perl-ci/build-perl "$PERL_VERSION" "$PERL_SHA256" "$PERL_DEVEL"
+
+# smoke is copied after the build so that editing it does not invalidate the
+# (slow) perl layer above.
+COPY bin/smoke /usr/local/src/perl-ci/
 
 RUN perl /usr/local/src/perl-ci/smoke perl "$PERL_VERSION"
 
