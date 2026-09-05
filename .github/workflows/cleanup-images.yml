@@ -21,6 +21,10 @@ on:
         description: "Regex of tags to delete outright; empty for none.  Stale point-release tags: ^5[.][0-9]+[.][0-9]+$|^5[.][0-9]+[.][0-9]+-[a-z]+$  (the action rejects quantified groups as ReDoS-prone, so spell alternatives out)"
         type: string
         default: ""
+      older-than:
+        description: Only touch images older than this (the schedule uses 7 days)
+        type: string
+        default: 7 days
 
 # Don't prune while a publish is mid-flight.
 concurrency:
@@ -38,7 +42,7 @@ jobs:
           package: perl-ci
           delete-untagged: true
           delete-orphaned-images: true
-          older-than: 7 days
+          older-than: ${{ inputs.older-than || '7 days' }}
           validate: true
           use-regex: true
           delete-tags: ${{ inputs.delete-tags }}
