@@ -1,0 +1,144 @@
+name: Build images
+
+on:
+  workflow_dispatch:
+    inputs:
+      debian:
+        description: Debian release to build on
+        type: choice
+        options: [trixie, forky, all]
+        default: trixie
+      perl:
+        description: "Perl to build: a version (5.36.3), an alias (5.36, devel), 'stable', or 'all'"
+        type: string
+        default: all
+      push:
+        description: Push the images to GHCR
+        type: boolean
+        default: false
+
+# Two runs pushing the same tags would race; let them queue instead.
+concurrency:
+  group: build-images
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/rjbs/perl-ci
+
+jobs:
+  matrix:
+    name: Work out the matrix
+    runs-on: ubuntu-latest
+    outputs:
+      cells: ${{ steps.matrix.outputs.cells }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: matrix
+        run: |
+          args=()
+          if [ "${{ inputs.debian }}" != all ]; then
+            args+=(--debian "${{ inputs.debian }}")
+          fi
+          case "${{ inputs.perl }}" in
+            all)    args+=(--all) ;;
+            stable) args+=(--stable) ;;
+            *)      args+=(--perl "${{ inputs.perl }}") ;;
+          esac
+          cells="$(bin/build --matrix "${args[@]}")"
+          echo "$cells" | jq .
+          echo "cells=$cells" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: ${{ matrix.cell.version }} ${{ matrix.cell.debian }} ${{ matrix.arch }}
+    needs: matrix
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    timeout-minutes: 180
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        cell: ${{ fromJson(needs.matrix.outputs.cells) }}
+        arch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v3
+
+      - if: inputs.push
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Each arch is pushed by digest only; the merge job below stitches the
+      # two digests into one manifest list and applies the cell's tags.
+      - id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/${{ matrix.arch }}
+          build-args: |
+            DEBIAN_RELEASE=${{ matrix.cell.debian }}
+            PERL_VERSION=${{ matrix.cell.version }}
+            PERL_SHA256=${{ matrix.cell.sha256 }}
+            PERL_DEVEL=${{ matrix.cell.devel }}
+          outputs: ${{ inputs.push && format('type=image,name={0},push-by-digest=true,name-canonical=true,push=true', env.IMAGE) || 'type=cacheonly' }}
+
+      - if: inputs.push
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - if: inputs.push
+        uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ matrix.cell.version }}-${{ matrix.cell.debian }}-${{ matrix.arch }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    name: tag ${{ matrix.cell.version }} ${{ matrix.cell.debian }}
+    needs: [matrix, build]
+    # A single failed cell must not keep every other cell from being tagged,
+    # so run even when some build jobs failed; each cell checks for its own
+    # two digests below.
+    if: ${{ !cancelled() && inputs.push }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        cell: ${{ fromJson(needs.matrix.outputs.cells) }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: digest-${{ matrix.cell.version }}-${{ matrix.cell.debian }}-*
+          path: /tmp/digests
+          merge-multiple: true
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - run: |
+          cd /tmp/digests
+          count=$(ls | wc -l)
+          if [ "$count" -ne 2 ]; then
+            echo "expected 2 digests for this cell, found $count; not tagging" >&2
+            exit 1
+          fi
+          tags=$(echo "${{ matrix.cell.tags }}" | tr ',' '\n' | sed "s|^|--tag $IMAGE:|" | tr '\n' ' ')
+          docker buildx imagetools create $tags $(printf "$IMAGE@sha256:%s " *)
+
+      - run: docker buildx imagetools inspect "$IMAGE:${{ matrix.cell.version }}-${{ matrix.cell.debian }}"
