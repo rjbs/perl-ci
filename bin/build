@@ -1,0 +1,163 @@
+#!/usr/bin/env perl
+use v5.36;
+
+use Getopt::Long;
+use JSON::PP;
+use Time::HiRes qw(time);
+
+=head1 NAME
+
+build - build perl-ci images for cells of the debian × perl matrix
+
+=head1 SYNOPSIS
+
+  bin/build --debian trixie --perl 5.36          # one cell, host arch, loaded locally
+  bin/build --debian trixie --stable             # every non-devel perl on trixie
+  bin/build --debian trixie --all                # every perl on trixie
+  bin/build --debian trixie --perl 5.8 --target perl   # stop after building perl
+  bin/build --perl 5.36 --push --platform linux/amd64,linux/arm64
+  bin/build --matrix [--debian trixie] [--perl 5.36]   # JSON for the GitHub Actions matrix
+
+Every cell's build log goes to F<logs/VERSION-DEBIAN.log>.  Builds run one
+after another; a failure is reported and the next cell is attempted.  The
+exit status is nonzero if any cell failed.
+
+=cut
+
+my %opt = (
+  manifest => 'perls.json',
+  image    => 'ghcr.io/rjbs/perl-ci',
+  debian   => [],
+  perl     => [],
+  logdir   => 'logs',
+);
+
+GetOptions(
+  'manifest=s' => \$opt{manifest},
+  'image=s'    => \$opt{image},
+  'debian=s@'  => \$opt{debian},
+  'perl=s@'    => \$opt{perl},
+  'all'        => \$opt{all},
+  'stable'     => \$opt{stable},
+  'target=s'   => \$opt{target},
+  'platform=s' => \$opt{platform},
+  'push'       => \$opt{push},
+  'matrix'     => \$opt{matrix},
+  'logdir=s'   => \$opt{logdir},
+) or die "bad options; see perldoc $0\n";
+
+die "--push requires --platform\n" if $opt{push} && ! $opt{platform};
+
+my $json     = JSON::PP->new->utf8->canonical;
+my $manifest = do {
+  open my $fh, '<:raw', $opt{manifest} or die "can't read $opt{manifest}: $!\n";
+  $json->decode(do { local $/; <$fh> });
+};
+
+# Which debians and perls are we talking about?  With --matrix and no
+# selection, everything; otherwise a selection is required so nobody kicks
+# off forty builds by accident.
+sub select_debians ($manifest, $wanted) {
+  return $manifest->{debians}->@* unless @$wanted;
+  for my $d (@$wanted) {
+    die "unknown debian release $d\n" unless grep { $_ eq $d } $manifest->{debians}->@*;
+  }
+  return @$wanted;
+}
+
+sub select_perls ($manifest, $opt) {
+  my @perls = $manifest->{perls}->@*;
+  return @perls if $opt->{all} || ($opt->{matrix} && ! $opt->{stable} && ! $opt->{perl}->@*);
+  return grep { ! $_->{devel} } @perls if $opt->{stable};
+
+  die "select perls with --perl, --stable, or --all\n" unless $opt->{perl}->@*;
+
+  my @selected;
+  for my $want ($opt->{perl}->@*) {
+    my ($perl) = grep { $_->{version} eq $want || grep { $_ eq $want } $_->{aliases}->@* } @perls;
+    die "no perl in $opt->{manifest} matches $want\n" unless $perl;
+    push @selected, $perl;
+  }
+  return @selected;
+}
+
+# The tag list for a cell.  Every cell gets VERSION-DEBIAN and ALIAS-DEBIAN;
+# only cells on the default debian also get the bare VERSION and ALIAS tags,
+# so exactly one image owns each of "5.36", "latest", and "devel".
+sub tags_for ($manifest, $perl, $debian) {
+  my @names = ($perl->{version}, $perl->{aliases}->@*);
+  my @tags  = map {; "$_-$debian" } @names;
+  push @tags, @names if $debian eq $manifest->{default_debian};
+  return @tags;
+}
+
+my @debians = select_debians($manifest, $opt{debian});
+my @perls   = select_perls($manifest, \%opt);
+
+my @cells;
+for my $debian (@debians) {
+  for my $perl (@perls) {
+    push @cells, {
+      version => $perl->{version},
+      sha256  => $perl->{sha256},
+      devel   => ($perl->{devel} ? 1 : 0),
+      debian  => $debian,
+      tags    => [ tags_for($manifest, $perl, $debian) ],
+    };
+  }
+}
+
+if ($opt{matrix}) {
+  # GitHub Actions wants flat scalars in an include entry, so tags are joined.
+  my @include = map {; +{ %$_, tags => join(',', $_->{tags}->@*) } } @cells;
+  print $json->encode(\@include), "\n";
+  exit 0;
+}
+
+mkdir $opt{logdir} unless -d $opt{logdir};
+
+# docker's output is not interesting in real time when building twenty
+# images; it goes to the log, and we print one line per cell.
+sub run_logged ($log, @cmd) {
+  my $pid = fork // die "can't fork: $!\n";
+  if (! $pid) {
+    open STDOUT, '>', $log or die "can't write $log: $!\n";
+    open STDERR, '>&', \*STDOUT or die "can't dup stdout: $!\n";
+    exec @cmd or die "can't exec @cmd: $!\n";
+  }
+  waitpid $pid, 0;
+  return $? == 0;
+}
+
+my @results;
+for my $cell (@cells) {
+  my $log = "$opt{logdir}/$cell->{version}-$cell->{debian}.log";
+
+  my @cmd = (
+    qw(docker buildx build --progress=plain),
+    '--build-arg', "DEBIAN_RELEASE=$cell->{debian}",
+    '--build-arg', "PERL_VERSION=$cell->{version}",
+    '--build-arg', "PERL_SHA256=$cell->{sha256}",
+    '--build-arg', "PERL_DEVEL=$cell->{devel}",
+    (map {; ('--tag', "$opt{image}:$_") } $cell->{tags}->@*),
+    ($opt{target}   ? ('--target',   $opt{target})   : ()),
+    ($opt{platform} ? ('--platform', $opt{platform}) : ()),
+    ($opt{push}     ? '--push' : '--load'),
+    '.',
+  );
+
+  printf "%-8s %-8s building... (log: %s)\n", $cell->{version}, $cell->{debian}, $log;
+  my $start = time;
+  my $ok    = run_logged($log, @cmd);
+  my $took  = sprintf '%d:%02d', int((time - $start) / 60), (time - $start) % 60;
+
+  printf "%-8s %-8s %s in %s\n", $cell->{version}, $cell->{debian}, ($ok ? 'ok' : 'FAILED'), $took;
+  push @results, { %$cell, ok => $ok, took => $took, log => $log };
+}
+
+say "";
+say "results:";
+printf "  %-8s %-8s %-6s %6s  %s\n", $_->{version}, $_->{debian}, ($_->{ok} ? 'ok' : 'FAILED'), $_->{took}, ($_->{ok} ? '' : $_->{log})
+  for @results;
+
+exit((grep { ! $_->{ok} } @results) ? 1 : 0);
