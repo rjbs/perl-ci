@@ -1,6 +1,6 @@
 # perl-ci
 
-Docker images for testing Perl code in CI: one image for every cell of a
+Container images for testing Perl code in CI: one image for every cell of a
 small matrix of Debian releases and perl versions, each with a perl built from
 source, `cpanm`, `cpm`, and the same collection of testing modules and helper
 scripts that `perldocker/perl-tester` provides.
