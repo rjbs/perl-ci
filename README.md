@@ -33,6 +33,15 @@ A perl 5.8.8 linked against a 2025 glibc is a fine thing to run tests on, but
 it is not the same artifact as a 2006 perl on a 2006 libc.  If you need to
 reproduce a genuinely old deployment, this is not the image for that.
 
+`yath` on the 5.8 image is Test2::Harness 0.001030, from 2017.  It is the last
+release that declares support for 5.8.8: 0.001031 raised the floor to 5.8.9 and
+nothing since has lowered it.  Two bugs fixed in later releases are still in
+this one.  Non-ASCII test names and notes render as mojibake, which is only
+cosmetic.  A test that has `$,` or `$\` set while it emits an event makes the
+harness die with a JSON decode error and reports that file as failed, which is
+a spurious failure -- but a loud one, so if you see it, you have not found a
+real bug in your code.
+
 ## The matrix
 
 Debian: `trixie` (owns the unversioned tags) and `forky`.

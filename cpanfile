@@ -420,7 +420,7 @@ requires_by_perl 'Test2::Bundle::Extended',
 	;
 
 requires_by_perl 'Test2::Harness',
-	prior 5.010 => skip,
+	prior 5.010 => '==0.001030',    # last release that still declares 5.8.8; see README
 	prior 5.026 => '==1.000156',    # 1.000170+ requires List::Util >= 1.44; Perl 5.24 ships 1.4202
 	prior 5.030 => '==1.000170',    # 1.000171+ added App::Yath::Script dep which breaks Perl 5.026-5.029
 	;
