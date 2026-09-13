@@ -68,7 +68,12 @@ my @configure = (
 # every one of them.  -fpermissive demotes them back to warnings.  It lands in
 # $Config{ccflags}, so XS built against these perls gets it too, which is what
 # we want: old XS is no cleaner than old perl. -- claude, 2026-09-05
-push @configure, q{-Accflags=-fPIC -fpermissive} if $minor < 30;
+#
+# forky's gcc 16 defaults to C23, where sdbm.c's own extern declarations of
+# malloc and free conflict with the ones in stdlib.h.  That is a hard error
+# that -fpermissive does not demote, so ask for the dialect these perls were
+# written in. -- claude, 2026-09-13
+push @configure, q{-Accflags=-fPIC -fpermissive -std=gnu17} if $minor < 30;
 
 push @configure, '-Dusedevel', '-Dversiononly=undef' if $devel;
 
