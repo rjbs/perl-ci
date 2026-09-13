@@ -33,6 +33,8 @@ jobs:
       cells: ${{ steps.matrix.outputs.cells }}
     steps:
       - uses: actions/checkout@v7
+      - name: Install Getopt::Long::Descriptive for bin/build
+        run: sudo apt-get update -q && sudo apt-get install -y --no-install-recommends libgetopt-long-descriptive-perl
       - id: matrix
         run: |
           args=()

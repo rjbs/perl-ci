@@ -86,6 +86,9 @@ If you use `perldocker/perl-tester` today, change the image name:
 Each build logs to `logs/VERSION-DEBIAN.log`.  A native build takes a minute
 or so for perl and much longer for the cpanfile.
 
+The build scripts need `Getopt::Long::Descriptive` (`libgetopt-long-descriptive-perl`
+on Debian and Ubuntu); everything else they use ships with perl.
+
 ## Building and publishing in CI
 
 `.github/workflows/build.yml` is run by hand (`workflow_dispatch`).  Pick a
