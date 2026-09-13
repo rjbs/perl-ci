@@ -46,6 +46,12 @@ if ($stage eq 'full') {
   module_loads($_) for qw(Test::More Test2::V0 Carton::Snapshot);
   module_loads('Dist::Zilla') if $] >= 5.022;
 
+  # yath is what CI actually invokes, and on the old perls it comes from a
+  # pinned, ancient Test2::Harness, so notice here if it stops installing
+  # instead of in somebody's build. -- claude, 2026-09-13
+  module_loads('App::Yath');
+  check('yath in /usr/local/bin', -x '/usr/local/bin/yath');
+
   for my $helper (qw(build-dist test-dist cpan-install-dist-deps cpan-install-build-deps auto-build-and-test-dist)) {
     check("helper $helper in /usr/local/bin", -x "/usr/local/bin/$helper");
   }
