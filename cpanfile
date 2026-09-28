@@ -96,10 +96,6 @@ requires_by_perl 'Code::TidyAll::Plugin::UniqueLines',
 	prior 5.014 => skip,
 	;
 
-requires_by_perl 'Cpanel::JSON::XS',
-	prior 5.036 => '==4.50',    # 4.51+ NEON code fails -Werror=declaration-after-statement on aarch64; https://github.com/rurban/Cpanel-JSON-XS/issues/258
-	;
-
 requires_by_perl 'Data::Compare',
 	;
 
